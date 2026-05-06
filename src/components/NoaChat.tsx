@@ -154,7 +154,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                 alt="Noa Professional"
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=N&background=0284c7&color=fff';
+                  (e.target as HTMLImageElement).src = 'https://i.postimg.cc/B6QMLtRc/Gemini-Generated-Image-s9onzs9onzs9onzs.png';
                 }}
              />
           </div>
@@ -204,10 +204,10 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                       if (product) {
                         openTutorial(product);
                       } else if (fileName) {
-                         const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                         const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
                          window.open(`https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(fileName)}`, '_blank');
                       } else {
-                        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                        const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
                         window.open(`https://drive.google.com/drive/u/0/folders/${folderId}`, '_blank');
                       }
                       return;
