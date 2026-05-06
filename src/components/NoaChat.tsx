@@ -150,7 +150,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-xl">
              <img 
-                src="https://drive.google.com/file/d/1rNqc6gCoi8-5AgllO1QolVOf0QZ1L-DL/view" 
+                src="https://ibb.co/ZpxLxJkV" 
                 alt="Noa Professional"
                 className="w-full h-full object-cover"
                 onError={(e) => {
