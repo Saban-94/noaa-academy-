@@ -80,7 +80,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
         };
         onSelectMedia(newItem);
       } else {
-        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+        const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
         const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
         window.open(searchUrl, '_blank');
       }
@@ -150,7 +150,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-xl">
              <img 
-                src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                src="https://drive.google.com/file/d/1rNqc6gCoi8-5AgllO1QolVOf0QZ1L-DL/view" 
                 alt="Noa Professional"
                 className="w-full h-full object-cover"
                 onError={(e) => {
