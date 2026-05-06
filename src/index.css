@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Heebo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-dark: #0f172a;
+  --color-brand-shell: #0a0a0c;
+  --color-brand-content: #1e293b;
+  --color-brand-chat: #020617;
+  --color-brand-blue: #38bdf8;
+  --color-brand-light: #f8fafc;
+  --color-brand-text: #f8fafc;
+  --color-brand-muted: #94a3b8;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-brand-dark text-brand-text antialiased;
+    direction: rtl;
+    background: linear-gradient(135deg, var(--color-brand-shell) 0%, var(--color-brand-dark) 100%);
+    @apply min-h-screen w-full overflow-x-hidden;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+.glass-item {
+  @apply bg-white/[0.03] border border-white/10 rounded-xl backdrop-blur-md;
+}
+
+.nav-item {
+  @apply px-4 py-2.5 rounded-lg text-brand-muted cursor-pointer transition-all duration-200 text-sm;
+}
+
+.nav-item.active {
+  @apply bg-brand-blue/10 text-brand-blue font-bold;
+}
+
+.content-card {
+  @apply bg-white text-brand-content rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3)] overflow-hidden;
+}
+
+.noa-badge {
+  @apply bg-brand-blue text-brand-dark px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tight;
+}
