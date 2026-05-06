@@ -98,32 +98,65 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
       {/* Header */}
       <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/20">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded bg-gradient-to-tr from-blue-600 to-cyan-400 shadow-lg" />
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-xl">
+             <img 
+                src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                alt="Noa Professional"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=N&background=0284c7&color=fff';
+                }}
+             />
+          </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">נועה</span>
-              <span className="noa-badge">סוכנת AI</span>
+              <span className="font-bold text-white">נועה | מומחית טכנית ח.סבן</span>
+              <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded text-[8px] font-black uppercase border border-emerald-500/20">
+                Official Agent
+              </div>
             </div>
-            <p className="text-[10px] text-brand-muted font-medium mt-0.5">יועצת אסטרטגית Hub</p>
+            <p className="text-[10px] text-brand-muted font-black tracking-widest uppercase mt-0.5">סוכנת AI • נירלט & סבן היבואן</p>
           </div>
         </div>
         <Sparkles size={16} className="text-brand-blue" />
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} flex-col gap-2`}>
-            <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row' : 'flex-row-reverse'}`}>
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-inner ${msg.role === 'user' ? 'bg-slate-800' : 'bg-brand-blue/20 text-brand-blue'}`}>
-                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-              </div>
-              <div className={`max-w-[85%] p-4 rounded-xl text-sm leading-relaxed ${
+            <div className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row' : 'flex-row-reverse'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 shadow-inner overflow-hidden ${
                 msg.role === 'user' 
-                ? 'bg-slate-800/50 text-slate-100' 
-                : 'glass-item text-brand-text border-white/5 font-medium'
+                ? 'bg-slate-800 border-white/10' 
+                : 'bg-brand-blue/20 border-emerald-500/50'
               }`}>
-                {msg.content}
+                {msg.role === 'user' ? (
+                  <User size={20} className="text-white" />
+                ) : (
+                  <img 
+                    src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                    alt="Noa"
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+              <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-start' : 'items-end'}`}>
+                <div className="flex items-center gap-2 mb-1.5 px-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {msg.role === 'user' ? 'אתה' : 'נועה • מומחית טכנית'}
+                  </span>
+                  {msg.role === 'model' && (
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  )}
+                </div>
+                <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                  msg.role === 'user' 
+                  ? 'bg-slate-800/80 text-slate-100 border border-white/5' 
+                  : 'glass-item text-brand-text border-white/5 font-medium'
+                }`}>
+                  {msg.content}
+                </div>
               </div>
             </div>
 

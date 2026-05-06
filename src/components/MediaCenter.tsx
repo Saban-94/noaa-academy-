@@ -50,7 +50,7 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({ mediaItems, products }
   };
 
   return (
-    <div className="fixed inset-0 bg-brand-dark overflow-hidden flex flex-col font-sans px-safe pt-safe pb-safe">
+    <div className="fixed inset-0 bg-brand-dark overflow-hidden flex flex-col font-sans px-safe pt-safe pb-safe h-[100svh]">
       {/* Top Bar */}
       <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 bg-black/20 backdrop-blur-md border-b border-white/5 z-40">
         <button 

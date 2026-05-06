@@ -20,9 +20,11 @@ import {
   Maximize2,
   Sparkles,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  FileSearch
 } from 'lucide-react';
 import { MediaItem, MediaType } from '../types';
+import { summarizePresentation } from '../services/geminiService';
 
 interface MediaWidgetProps {
   item: MediaItem;
@@ -59,6 +61,96 @@ const getEmbedUrl = (url: string, type: MediaType) => {
   }
 };
 
+const MIND_MAP_DATA = {
+  id: 'root',
+  label: 'אסטרטגיית נירלט 2025',
+  children: [
+    {
+      id: 'c1',
+      label: 'טכנולוגיה וחווית לקוח',
+      children: [
+        { id: 'c1-1', label: 'אפליקציית סריקת צבע' },
+        { id: 'c1-2', label: 'מציאות רבודה (AR) לעיצוב פנים' },
+        { id: 'c1-3', label: 'צ\'אטבוט "נועה" לשירות עצמי' },
+      ]
+    },
+    {
+      id: 'c2',
+      label: 'קיימות ובנייה ירוקה',
+      children: [
+        { id: 'c2-1', label: 'פיתוח צבעים על בסיס מים' },
+        { id: 'c2-2', label: 'חיסכון באנרגיה בייצור' },
+        { id: 'c2-3', label: 'מיחזור אריזות' },
+      ]
+    },
+    {
+      id: 'c3',
+      label: 'אופטימיזציית שרשרת אספקה',
+      children: [
+        { id: 'c3-1', label: 'ניהול מלאי מבוסס AI' },
+        { id: 'c3-2', label: 'קיצור זמני הפצה' },
+        { id: 'c3-3', label: 'שיתוף פעולה עם לוגיסטיקה חכמה' },
+      ]
+    }
+  ]
+};
+
+interface MindMapNodeProps {
+  node: any;
+  level?: number;
+  expandedNodes: Set<string>;
+  toggleNode: (id: string) => void;
+}
+
+const MindMapBranch: React.FC<MindMapNodeProps> = ({ node, level = 0, expandedNodes, toggleNode }) => {
+  const isExpanded = expandedNodes.has(node.id);
+  const hasChildren = node.children && node.children.length > 0;
+
+  return (
+    <div className={`flex flex-col ${level > 0 ? 'mr-6 border-r-2 border-brand-blue/20 pr-4 mt-2' : 'w-full'}`}>
+      <motion.div 
+        layout
+        onClick={() => hasChildren && toggleNode(node.id)}
+        className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+          level === 0 
+          ? 'bg-brand-blue border-brand-blue text-brand-dark shadow-xl shadow-brand-blue/20' 
+          : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${level === 0 ? 'bg-brand-dark/20' : 'bg-brand-blue/10'}`}>
+            <Network size={16} className={level === 0 ? 'text-brand-dark' : 'text-brand-blue'} />
+          </div>
+          <span className={`text-sm font-bold ${level === 0 ? 'text-brand-dark' : 'text-white'}`}>{node.label}</span>
+        </div>
+        {hasChildren && (
+          <motion.div
+            animate={{ rotate: isExpanded ? 45 : 0 }}
+            className={level === 0 ? 'text-brand-dark' : 'text-brand-blue'}
+          >
+            <Plus size={16} />
+          </motion.div>
+        )}
+      </motion.div>
+
+      <AnimatePresence>
+        {isExpanded && hasChildren && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden space-y-2"
+          >
+            {node.children.map((child: any) => (
+              <MindMapBranch key={child.id} node={child} level={level + 1} expandedNodes={expandedNodes} toggleNode={toggleNode} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [currentSlide, setCurrentSlide] = useState(() => {
@@ -71,8 +163,28 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const [loadError, setLoadError] = useState(false);
   const [rawTableData, setRawTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [presentationSummary, setPresentationSummary] = useState<string | null>(() => {
+    return localStorage.getItem(`summary_${item.id}`);
+  });
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const totalSlides = 12;
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+      // Try to lock orientation to landscape on mobile if possible
+      if (window.screen.orientation && (window.screen.orientation as any).lock) {
+        (window.screen.orientation as any).lock('landscape').catch(() => {});
+      }
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   // Persist state
   useEffect(() => {
@@ -116,7 +228,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
     }
   }, [item.type]);
 
-  const [isMindMapExpanded, setIsMindMapExpanded] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['root']));
 
   // Keyboard navigation
   useEffect(() => {
@@ -134,6 +246,19 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const prevSlide = () => setCurrentSlide(prev => Math.max(prev - 1, 1));
   const zoomIn = () => setZoom(prev => Math.min(prev + 0.25, 2));
   const zoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
+
+  const handleSummarize = async () => {
+    setIsGeneratingSummary(true);
+    try {
+      const summary = await summarizePresentation(item.title, item.url);
+      setPresentationSummary(summary);
+      localStorage.setItem(`summary_${item.id}`, summary);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const renderContent = () => {
     if (loadError) {
@@ -157,34 +282,40 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
     switch (item.type) {
       case MediaType.VIDEO:
         return (
-          <div className="relative aspect-video bg-black rounded-2xl overflow-hidden group shadow-2xl">
-            <iframe
-              src={getEmbedUrl(item.url, MediaType.VIDEO)}
-              className="w-full h-full"
-              allow="autoplay; encrypted-media; picture-in-picture"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title={item.title}
-              onError={() => setLoadError(true)}
-            />
+          <div ref={containerRef} className="relative aspect-video bg-black rounded-2xl overflow-hidden group shadow-2xl">
+            <motion.div 
+               animate={{ scale: zoom }}
+               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+               className="w-full h-full origin-center"
+            >
+              <iframe
+                src={getEmbedUrl(item.url, MediaType.VIDEO)}
+                className="w-full h-full"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                title={item.title}
+                onError={() => setLoadError(true)}
+              />
+            </motion.div>
             
             {/* Floating Top Controls */}
             <div className="absolute top-4 inset-x-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all z-20">
               <div className="flex bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl">
                  <button 
                   onClick={() => setPlaybackSpeed(prev => prev === 2 ? 0.5 : prev + 0.5)}
-                  className="w-12 h-11 flex items-center justify-center text-[10px] font-black text-white hover:bg-white/10 transition-colors border-l border-white/5 uppercase"
+                  className="w-12 h-12 flex items-center justify-center text-[10px] font-black text-white hover:bg-white/10 transition-colors border-l border-white/5 uppercase"
                  >
                    x{playbackSpeed}
                  </button>
-                 <button onClick={zoomIn} className="w-11 h-11 flex items-center justify-center text-white hover:bg-white/10 transition-colors border-l border-white/5"><ZoomIn size={18}/></button>
-                 <button onClick={zoomOut} className="w-11 h-11 flex items-center justify-center text-white hover:bg-white/10 transition-colors"><ZoomOut size={18}/></button>
+                 <button onClick={zoomIn} className="w-12 h-12 flex items-center justify-center text-white hover:bg-white/10 transition-colors border-l border-white/5"><ZoomIn size={20}/></button>
+                 <button onClick={zoomOut} className="w-12 h-12 flex items-center justify-center text-white hover:bg-white/10 transition-colors"><ZoomOut size={20}/></button>
               </div>
               
               <button 
-                onClick={() => window.open(item.url, '_blank')} 
-                className="w-11 h-11 flex items-center justify-center bg-brand-blue text-brand-dark rounded-xl shadow-xl hover:scale-105 active:scale-95 transition-all"
+                onClick={toggleFullscreen} 
+                className="w-12 h-12 flex items-center justify-center bg-brand-blue text-brand-dark rounded-xl shadow-xl hover:scale-105 active:scale-95 transition-all"
               >
-                <Maximize2 size={18} />
+                <Maximize2 size={20} />
               </button>
             </div>
 
@@ -250,49 +381,135 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
       case MediaType.PRESENTATION:
         return (
           <div className="space-y-4">
-            <div className="relative aspect-[16/9] bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
+            <div ref={containerRef} className="relative aspect-[16/9] bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl group">
                <motion.div 
                  animate={{ scale: zoom }}
                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                  className="absolute inset-0 w-full h-full"
                >
                  <iframe 
-                   src={getEmbedUrl(item.url, MediaType.PRESENTATION)}
+                   src={`${getEmbedUrl(item.url, MediaType.PRESENTATION)}#slide=id.p${currentSlide}`}
                    className="w-full h-full border-0"
-                   sandbox="allow-scripts allow-same-origin"
+                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                    title={item.title}
                  />
                </motion.div>
 
-               {/* Glass UI Controls */}
+               {/* Glass UI Top Controls */}
                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-                 <div className="flex bg-black/40 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden">
-                   <button onClick={zoomOut} className="w-11 h-11 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-l border-white/5"><ZoomOut size={18}/></button>
+                 <div className="flex bg-black/60 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden">
+                   <button onClick={zoomOut} className="w-12 h-12 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-l border-white/5"><ZoomOut size={20}/></button>
                    <div className="px-3 flex items-center text-[10px] font-bold text-white min-w-[50px] justify-center">{Math.round(zoom * 100)}%</div>
-                   <button onClick={zoomIn} className="w-11 h-11 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"><ZoomIn size={18}/></button>
+                   <button onClick={zoomIn} className="w-12 h-12 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"><ZoomIn size={20}/></button>
                  </div>
-                 <button onClick={() => window.open(item.url, '_blank')} className="w-11 h-11 flex items-center justify-center bg-black/40 backdrop-blur-md rounded-xl border border-white/10 text-white hover:bg-white/10 transition-colors">
-                   <Maximize2 size={18} />
+                 <button onClick={toggleFullscreen} className="w-12 h-12 flex items-center justify-center bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white hover:bg-white/10 transition-colors shadow-lg">
+                   <Maximize2 size={20} />
                  </button>
                </div>
                
-               {/* Slide Nav Overlay */}
-               <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={prevSlide} className="w-12 h-12 bg-white/10 backdrop-blur rounded-full flex items-center justify-center text-white pointer-events-auto hover:bg-white/20 transition-all shadow-xl active:scale-95"><ChevronRight size={24}/></button>
-                 <button onClick={nextSlide} className="w-12 h-12 bg-white/10 backdrop-blur rounded-full flex items-center justify-center text-white pointer-events-auto hover:bg-white/20 transition-all shadow-xl active:scale-95"><ChevronLeft size={24}/></button>
+               {/* Side Nav Buttons - Always accessible but styled subtly */}
+               <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 pointer-events-none z-10">
+                 <motion.button 
+                   whileHover={{ scale: 1.05 }}
+                   whileTap={{ scale: 0.9 }}
+                   onClick={prevSlide} 
+                   className={`w-14 h-14 bg-black/40 backdrop-blur-xl rounded-full flex items-center justify-center text-white pointer-events-auto border border-white/10 shadow-2xl transition-all ${currentSlide === 1 ? 'opacity-20 grayscale pointer-events-none' : 'hover:bg-brand-blue hover:text-brand-dark opacity-0 group-hover:opacity-100'}`}
+                 >
+                   <ChevronRight size={28}/>
+                 </motion.button>
+                 <motion.button 
+                   whileHover={{ scale: 1.05 }}
+                   whileTap={{ scale: 0.9 }}
+                   onClick={nextSlide} 
+                   className={`w-14 h-14 bg-black/40 backdrop-blur-xl rounded-full flex items-center justify-center text-white pointer-events-auto border border-white/10 shadow-2xl transition-all ${currentSlide === totalSlides ? 'opacity-20 grayscale pointer-events-none' : 'hover:bg-brand-blue hover:text-brand-dark opacity-0 group-hover:opacity-100'}`}
+                 >
+                   <ChevronLeft size={28}/>
+                 </motion.button>
+               </div>
+
+               {/* Bottom Slide Status */}
+               <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="bg-black/80 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 flex items-center gap-3 shadow-2xl text-[10px] font-black pointer-events-auto">
+                    <span className="text-brand-blue">שקף {currentSlide} מתוך {totalSlides}</span>
+                  </div>
                </div>
             </div>
 
-            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
-               <div className="flex items-center gap-4">
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">מצגת סנכרון NotebookLM</span>
-                 <div className="flex gap-1">
-                   {[1,2,3,4].map(i => <div key={i} className={`h-1.5 w-8 rounded-full ${i === 1 ? 'bg-brand-blue' : 'bg-slate-200'}`} />)}
-                 </div>
-               </div>
-               <button className="text-brand-blue font-bold text-xs flex items-center gap-2 hover:underline">
-                 <ExternalLink size={16} /> דפדף ב-Google Docs
-               </button>
+            {/* Pagination / Context Bar */}
+            <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-3xl border border-white/5">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="flex bg-white/5 rounded-lg border border-white/10 p-1">
+                      <button 
+                        onClick={prevSlide} 
+                        disabled={currentSlide === 1}
+                        className="p-2 text-white hover:bg-white/5 disabled:opacity-20 rounded-md transition-colors"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                      <div className="px-3 flex items-center text-xs font-bold text-brand-blue min-w-[60px] justify-center">
+                        {currentSlide} / {totalSlides}
+                      </div>
+                      <button 
+                        onClick={nextSlide} 
+                        disabled={currentSlide === totalSlides}
+                        className="p-2 text-white hover:bg-white/5 disabled:opacity-20 rounded-md transition-colors"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                    </div>
+                    <div className="h-1.5 w-32 bg-white/5 rounded-full overflow-hidden hidden sm:block">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(currentSlide / totalSlides) * 100}%` }}
+                        className="h-full bg-brand-blue"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleSummarize}
+                      disabled={isGeneratingSummary}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-brand-dark rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400 transition-all disabled:opacity-50"
+                    >
+                      {isGeneratingSummary ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : (
+                        <FileSearch size={14} />
+                      )}
+                      סיכום AI
+                    </button>
+
+                    <button 
+                      onClick={() => window.open(item.url, '_blank')}
+                      className="text-brand-blue font-bold text-xs flex items-center gap-2 hover:underline tracking-tight"
+                    >
+                      <ExternalLink size={16} /> לצפייה ב-Google Docs
+                    </button>
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {presentationSummary && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                           <Sparkles size={14} className="text-brand-blue" />
+                           <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest">תובנות מפתח מנועה (AI Insights)</span>
+                        </div>
+                        <p className="text-slate-300 text-xs leading-relaxed whitespace-pre-wrap">
+                          {presentationSummary}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
             </div>
           </div>
         );
@@ -326,52 +543,63 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
              )}
           </div>
         );
-      case MediaType.MIND_MAP:
+      case MediaType.MIND_MAP: {
+        const toggleNode = (id: string) => {
+          const next = new Set(expandedNodes);
+          if (next.has(id)) {
+            next.delete(id);
+          } else {
+            next.add(id);
+          }
+          setExpandedNodes(next);
+        };
+
+        const expandAll = () => {
+          const allIds = ['root', 'c1', 'c1-1', 'c1-2', 'c1-3', 'c2', 'c2-1', 'c2-2', 'c2-3', 'c3', 'c3-1', 'c3-2', 'c3-3'];
+          setExpandedNodes(new Set(allIds));
+        };
+
+        const collapseAll = () => {
+          setExpandedNodes(new Set(['root']));
+        };
+
         return (
-          <div className="p-8 bg-slate-900 rounded-2xl border border-white/5 relative overflow-hidden min-h-[320px] transition-all duration-500">
+          <div className="p-6 bg-slate-900 rounded-3xl border border-white/5 relative overflow-hidden min-h-[400px] transition-all duration-500 font-sans text-right" dir="rtl">
             <div className="absolute inset-0 opacity-10 pointer-events-none">
-               <Network size={200} className="text-brand-blue -translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2" />
+               <Network size={300} className="text-brand-blue -translate-x-1/4 -translate-y-1/4 absolute top-0 left-0" />
             </div>
             
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="flex gap-4 mb-8">
-                <motion.div 
-                  animate={{ scale: isMindMapExpanded ? 1.1 : 1 }}
-                  className="w-16 h-16 bg-brand-blue/20 rounded-full flex items-center justify-center border border-brand-blue/30"
-                >
-                  <Network size={32} className="text-brand-blue" />
-                </motion.div>
+            <div className="relative z-10 flex flex-col">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col">
+                   <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">Mind Map Explorer</h4>
+                   <span className="text-[10px] text-brand-blue font-bold tracking-widest uppercase mt-0.5">סנכרון לוגי NotebookLM</span>
+                </div>
+                
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                   <button 
+                    onClick={expandAll}
+                    className="px-3 py-2 text-[9px] font-black text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors uppercase tracking-widest"
+                   >
+                     Expand All
+                   </button>
+                   <div className="w-px h-4 bg-white/10 self-center" />
+                   <button 
+                    onClick={collapseAll}
+                    className="px-3 py-2 text-[9px] font-black text-slate-400 hover:bg-white/5 rounded-lg transition-colors uppercase tracking-widest"
+                   >
+                     Reset
+                   </button>
+                </div>
               </div>
 
-              <div className="w-full max-w-md space-y-3">
-                <div 
-                  onClick={() => setIsMindMapExpanded(!isMindMapExpanded)}
-                  className="p-4 glass-item bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-all group"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-white font-bold text-sm">נושא מרכזי: אסטרטגיית נירלט 2025</span>
-                    <Plus size={16} className={`text-brand-blue transition-transform duration-300 ${isMindMapExpanded ? 'rotate-45' : ''}`} />
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {isMindMapExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden space-y-2 pr-4 border-r-2 border-brand-blue/30 mr-4"
-                    >
-                      <div className="p-3 bg-white/5 rounded-lg border border-white/5 text-xs text-brand-muted">תת-נושא א: שיפור חווית לקוח דרך טכנולוגיה</div>
-                      <div className="p-3 bg-white/5 rounded-lg border border-white/5 text-xs text-brand-muted">תת-נושא ב: אופטימיזציית שרשרת האספקה</div>
-                      <div className="p-3 bg-white/5 rounded-lg border border-white/5 text-xs text-brand-muted">תת-נושא ג: דגש על בנייה ירוקה</div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              <div className="w-full space-y-4">
+                <MindMapBranch node={MIND_MAP_DATA} expandedNodes={expandedNodes} toggleNode={toggleNode} />
               </div>
             </div>
           </div>
         );
+      }
       case MediaType.QUIZ:
         return (
           <div className="p-8 bg-brand-light rounded-2xl border-2 border-dashed border-slate-200 text-center">

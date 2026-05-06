@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { Message, Product } from "../types";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 const SYSTEM_PROMPT = `
 את שמה נועה, סוכנת AI חכמה בתוך אפליקציית "The Academy Hub". לשירותך עומדים תכנים המאוחסנים ב-Google Drive ומסונכרנים מ-NotebookLM.
@@ -17,6 +17,26 @@ const SYSTEM_PROMPT = `
 היסטוריית השיחות שלך מתועדת ב-Google Sheets לצורכי בקרה והמשכיות.
 `;
 
+export async function summarizePresentation(title: string, url: string) {
+  try {
+    const chat = ai.chats.create({
+      model: "gemini-3-flash-preview",
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+      },
+    });
+
+    const result = await chat.sendMessage({ 
+      message: `אנא סכם את המצגת הבאה: "${title}". מדובר במצגת לימודית/עסקית. הסבר בקצרה מהם 3-5 המסרים המרכזיים שניתן להפיק ממנה. המצגת נמצאת בכתובת: ${url}` 
+    });
+    
+    return result.text || "לא הצלחתי לסכם את המצגת.";
+  } catch (error) {
+    console.error("Summarization Error:", error);
+    return "שגיאה בביצוע הסיכום.";
+  }
+}
+
 export async function chatWithNoa(
   history: Message[], 
   currentContext: string, 
@@ -24,14 +44,13 @@ export async function chatWithNoa(
   mediaCatalog?: string
 ) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
     const productList = products.map(p => `- ${p.name} (קטגוריה: ${p.category}, מחיר: ${p.price}₪): ${p.description}`).join('\n');
     
     // Check if we have a recent sheet session (contextual memory)
     const sessionMemory = history.length > 5 ? "Remembering the logic from previous questions in this session." : "";
 
-    const prompt = `
+    const userPrompt = history[history.length - 1].content;
+    const groundingContext = `
 [GROUNDING SOURCE CONTENT FROM DRIVE]:
 ${currentContext}
 
@@ -41,22 +60,26 @@ ${mediaCatalog || "No media available"}
 [PRODUCT CATALOG]:
 ${productList}
 
-${SYSTEM_PROMPT}
 ${sessionMemory}
-
-User prompt: ${history[history.length - 1].content}
 `;
 
-    const chat = model.startChat({
-      history: history.slice(0, -1).map(m => ({
-        role: m.role,
+    const chatHistory = history.slice(0, -1);
+    const firstUserIndex = chatHistory.findIndex(m => m.role === 'user');
+    const validHistoryChunks = firstUserIndex !== -1 ? chatHistory.slice(firstUserIndex) : [];
+
+    const chat = ai.chats.create({
+      model: "gemini-3-flash-preview",
+      config: {
+        systemInstruction: SYSTEM_PROMPT + "\n" + groundingContext,
+      },
+      history: validHistoryChunks.map(m => ({
+        role: m.role as any,
         parts: [{ text: m.content }],
       })),
     });
 
-    const result = await chat.sendMessage(prompt);
-    const response = await result.response;
-    return response.text();
+    const result = await chat.sendMessage({ message: userPrompt });
+    return result.text || "מצטערת, לא הצלחתי לייצר תשובה.";
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "מצטערת, חל שגיאה בחיבור שלי. אנא נסה שוב מאוחר יותר.";
