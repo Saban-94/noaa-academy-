@@ -225,6 +225,10 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({ mediaItems, products }
                    setIsChatOpen(false); // Close chat to show the new media
                  }
                }}
+               onSelectMedia={(item) => {
+                 setActiveMedia(item);
+                 setIsChatOpen(false);
+               }}
              />
           </motion.div>
         )}

@@ -16,6 +16,11 @@ export interface MediaItem {
   url: string;
   description?: string;
   thumbnail?: string;
+  altSources?: {
+    type: MediaType;
+    url: string;
+    title?: string;
+  }[];
 }
 
 export interface AppState {
@@ -31,6 +36,9 @@ export interface Product {
   image: string;
   category: string;
   upsellProducts?: string[];
+  videoUrl?: string;
+  pdfUrl?: string;
+  complementaryProductId?: string;
 }
 
 export interface Message {

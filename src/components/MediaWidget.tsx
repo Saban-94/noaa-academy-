@@ -154,6 +154,15 @@ const MindMapBranch: React.FC<MindMapNodeProps> = ({ node, level = 0, expandedNo
 };
 
 export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
+  const [activeSource, setActiveSource] = useState<{ url: string; type: MediaType }>({
+    url: item.url,
+    type: item.type
+  });
+
+  useEffect(() => {
+    setActiveSource({ url: item.url, type: item.type });
+  }, [item.url, item.id]);
+
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [currentSlide, setCurrentSlide] = useState(() => {
     return parseInt(localStorage.getItem(`slide_${item.id}`) || '1');
@@ -168,12 +177,19 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const [loadError, setLoadError] = useState(false);
   const [rawTableData, setRawTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
   const [presentationSummary, setPresentationSummary] = useState<string | null>(() => {
     return localStorage.getItem(`summary_${item.id}`);
   });
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isLocalFullscreen, setIsLocalFullscreen] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Trigger loading state when item changes
+  useEffect(() => {
+    setIsIframeLoading(true);
+    setLoadError(false);
+  }, [item.url, item.id]);
 
   const totalSlides = 12;
 
@@ -279,7 +295,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
             נראה כי הקובץ חסום או שאינך מחובר לחשבון הארגוני המורשה.
           </p>
           <div className="flex justify-center gap-3">
-            <button onClick={() => window.open(item.url, '_blank')} className="bg-brand-dark text-white px-6 py-2 rounded-xl text-xs font-bold">פתח ב-Drive</button>
+            <button onClick={() => window.open(activeSource.url, '_blank')} className="bg-brand-dark text-white px-6 py-2 rounded-xl text-xs font-bold">פתח ב-Drive</button>
             <button onClick={() => setLoadError(false)} className="bg-slate-200 text-slate-700 px-6 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
               <RefreshCw size={14} /> נסה שוב
             </button>
@@ -288,22 +304,32 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
       );
     }
 
-    switch (item.type) {
+    switch (activeSource.type) {
       case MediaType.VIDEO:
         return (
           <div ref={containerRef} className="relative aspect-video bg-black rounded-2xl overflow-hidden group shadow-2xl">
+            {isIframeLoading && (
+              <div className="absolute inset-0 z-30 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center text-white">
+                <RefreshCw size={40} className="animate-spin text-brand-blue mb-4" />
+                <p className="text-xs font-black uppercase tracking-widest text-brand-blue">טוען סרטון הדרכה...</p>
+              </div>
+            )}
             <motion.div 
                animate={{ scale: zoom }}
                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                className="w-full h-full origin-center"
             >
               <iframe
-                src={getEmbedUrl(item.url, MediaType.VIDEO)}
+                src={getEmbedUrl(activeSource.url, MediaType.VIDEO)}
                 className="w-full h-full"
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                 title={item.title}
-                onError={() => setLoadError(true)}
+                onLoad={() => setIsIframeLoading(false)}
+                onError={() => {
+                  setLoadError(true);
+                  setIsIframeLoading(false);
+                }}
               />
             </motion.div>
             
@@ -389,7 +415,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
         );
       case MediaType.PRESENTATION:
       case MediaType.DOCUMENT:
-        const isDoc = item.type === MediaType.DOCUMENT;
+        const isDoc = activeSource.type === MediaType.DOCUMENT;
         return (
           <div className="space-y-4">
             <div 
@@ -398,6 +424,12 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                 isLocalFullscreen ? 'fixed inset-0 z-[100] rounded-none' : 'aspect-[16/9]'
               }`}
             >
+               {isIframeLoading && (
+                 <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center text-slate-800">
+                    <RefreshCw size={40} className="animate-spin text-brand-blue mb-4" />
+                    <p className="text-xs font-black uppercase tracking-widest text-brand-blue">מעבד תכני הדרכה...</p>
+                 </div>
+               )}
                <motion.div 
                  drag={zoom > 1}
                  dragConstraints={{ left: -200 * zoom, right: 200 * zoom, top: -400 * zoom, bottom: 400 * zoom }}
@@ -410,10 +442,11 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                  className="absolute inset-0 w-full h-full origin-center"
                >
                  <iframe 
-                   src={getEmbedUrl(item.url, item.type)}
+                   src={getEmbedUrl(activeSource.url, activeSource.type)}
                    className="w-full h-full border-0"
                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                    title={item.title}
+                   onLoad={() => setIsIframeLoading(false)}
                  />
                </motion.div>
  
@@ -494,7 +527,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                     </button>
  
                     <button 
-                      onClick={() => window.open(item.url, '_blank')}
+                      onClick={() => window.open(activeSource.url, '_blank')}
                       className="text-brand-blue font-bold text-xs flex items-center gap-2 hover:underline tracking-tight"
                     >
                       <ExternalLink size={16} /> לצפייה ב-Google Docs
@@ -537,7 +570,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                 <table className="w-full text-right">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
                     <tr>
-                      {rawTableData.length > 0 && Object.keys(rawTableData[0]).map(k => <th key={k} className="px-6 py-4">{k}</th>)}
+                      {rawTableData.length > 0 && Object.keys(rawTableData[0]).map((k, idx) => <th key={`${k}-${idx}`} className="px-6 py-4">{k}</th>)}
                     </tr>
                   </thead>
                   <tbody className="text-sm">
@@ -661,15 +694,45 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="content-card mb-8 shadow-2xl border border-slate-100"
+      className="content-card mb-8 shadow-2xl border border-slate-100 overflow-hidden"
     >
-      <div className="p-4 border-b border-slate-100 bg-white flex justify-between items-center">
+      <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-          {item.type === MediaType.VIDEO && <Play size={18} className="text-brand-blue" />}
-          {item.type === MediaType.AUDIO && <Music size={18} className="text-brand-blue" />}
+          {activeSource.type === MediaType.VIDEO && <Play size={18} className="text-brand-blue" />}
+          {activeSource.type === MediaType.AUDIO && <Music size={18} className="text-brand-blue" />}
+          {activeSource.type === MediaType.DOCUMENT && <FileText size={18} className="text-brand-blue" />}
           <span className="uppercase tracking-tight text-sm font-bold">{item.title}</span>
         </h3>
-        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{item.type}</span>
+        
+        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200">
+           <button 
+             onClick={() => setActiveSource({ url: item.url, type: item.type })}
+             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+               activeSource.url === item.url 
+               ? 'bg-brand-blue text-brand-dark shadow-sm' 
+               : 'text-slate-400 hover:text-slate-600'
+             }`}
+           >
+             {item.type === MediaType.VIDEO ? 'סרטון הדרכה' : 'מסמך ראשי'}
+           </button>
+           
+           {item.altSources?.map((source, idx) => (
+             <button 
+               key={idx}
+               onClick={() => setActiveSource({ url: source.url, type: source.type })}
+               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                 activeSource.url === source.url 
+                 ? 'bg-brand-blue text-brand-dark shadow-sm' 
+                 : 'text-slate-400 hover:text-slate-600'
+               }`}
+             >
+               {source.title || (source.type === MediaType.VIDEO ? 'וידאו' : 'מסמך')}
+             </button>
+           ))}
+
+           <div className="w-px h-4 bg-slate-200 mx-1" />
+           <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest px-2">{activeSource.type}</span>
+        </div>
       </div>
       <div className="p-6">
         {renderContent()}

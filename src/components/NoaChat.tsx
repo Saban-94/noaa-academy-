@@ -1,18 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Bot, User, Sparkles, ShoppingBag, ArrowLeft, Plus, History, Video } from 'lucide-react';
-import { Message, Product, MediaItem } from '../types';
+import { Message, Product, MediaItem, MediaType } from '../types';
 import { chatWithNoa } from '../services/geminiService';
-import { logChat, fetchChatHistory } from '../services/apiService';
+import { logChat, fetchChatHistory, getFileId } from '../services/apiService';
 
 interface NoaChatProps {
   products: Product[];
   currentContext: string;
   mediaItems?: MediaItem[];
   onNavigate?: (id: string) => void;
+  onSelectMedia?: (item: MediaItem) => void;
 }
 
-export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, mediaItems, onNavigate }) => {
+export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, mediaItems, onNavigate, onSelectMedia }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -23,6 +24,8 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingTutorial, setIsLoadingTutorial] = useState(false);
+  const [loadingTutorialName, setLoadingTutorialName] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load history on mount
@@ -41,21 +44,62 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, isLoadingTutorial]);
 
-  const openFile = (productName: string) => {
-    const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
-    const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(productName)}`;
-    window.open(searchUrl, '_blank');
+  const openTutorial = async (product: Product) => {
+    setIsLoadingTutorial(true);
+    setLoadingTutorialName(product.name);
+    
+    try {
+      let videoUrl = product.videoUrl;
+      let pdfUrl = product.pdfUrl;
+
+      if (!videoUrl && !pdfUrl) {
+        const fileId = await getFileId(product.name);
+        if (fileId) {
+          videoUrl = `https://drive.google.com/file/d/${fileId}/view`;
+        }
+      }
+
+      if ((videoUrl || pdfUrl) && onSelectMedia) {
+        const altSources = [];
+        if (videoUrl && pdfUrl) {
+           altSources.push({ type: MediaType.DOCUMENT, url: pdfUrl.startsWith('http') ? pdfUrl : `https://drive.google.com/file/d/${pdfUrl}/view`, title: 'חשוב: מפרט טכני (PDF)' });
+        }
+
+        const primaryUrl = videoUrl || pdfUrl || '';
+        const primaryType = videoUrl ? MediaType.VIDEO : MediaType.DOCUMENT;
+
+        const newItem: MediaItem = {
+          id: `dynamic-${Date.now()}`,
+          title: `הדרכה: ${product.name}`,
+          type: primaryType,
+          url: primaryUrl.startsWith('http') ? primaryUrl : `https://drive.google.com/file/d/${primaryUrl}/view`,
+          description: `הדרכה טכנית עבור ${product.name}`,
+          altSources: altSources
+        };
+        onSelectMedia(newItem);
+      } else {
+        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+        const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
+        window.open(searchUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error opening tutorial:', error);
+    } finally {
+      setIsLoadingTutorial(false);
+      setLoadingTutorialName('');
+    }
   };
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (overrideInput?: string) => {
+    const textToSend = overrideInput || input;
+    if (!textToSend.trim()) return;
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role: 'user',
-      content: input,
+      content: textToSend,
       timestamp: new Date(),
     };
 
@@ -78,7 +122,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
 
     // Log to Google Sheets
     await logChat({
-      question: input,
+      question: textToSend,
       answer: cleanResponse,
       author: 'ישראל ישראלי'
     });
@@ -87,12 +131,12 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
     const suggestedProducts = products.filter(p => cleanResponse.includes(p.name));
 
     const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
+      id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role: 'model',
       content: cleanResponse,
       timestamp: new Date(),
       recommendations: suggestedProducts.length > 0 ? suggestedProducts : undefined,
-      navigationId: targetMedia?.id // Add navigationId to Message type
+      navigationId: targetMedia?.id 
     };
 
     setMessages(prev => [...prev, aiMsg]);
@@ -130,38 +174,80 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} flex-col gap-2`}>
-            <div className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row' : 'flex-row-reverse'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 shadow-inner overflow-hidden ${
-                msg.role === 'user' 
-                ? 'bg-slate-800 border-white/10' 
-                : 'bg-brand-blue/20 border-emerald-500/50'
-              }`}>
-                {msg.role === 'user' ? (
-                  <User size={20} className="text-white" />
-                ) : (
-                  <img 
-                    src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
-                    alt="Noa"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
-              <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-start' : 'items-end'}`}>
-                <div className="flex items-center gap-2 mb-1.5 px-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-start ml-auto max-w-[90%]' : 'justify-end mr-auto max-w-[90%]'} flex-col gap-2`}>
+            <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row' : 'flex-row-reverse'}`}>
+              {msg.role === 'user' && (
+                <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+                  <User size={16} className="text-white" />
+                </div>
+              )}
+              
+              <div className={`flex flex-col ${msg.role === 'user' ? 'items-start' : 'items-end'}`}>
+                <div className="flex items-center gap-2 mb-1 px-1">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                     {msg.role === 'user' ? 'אתה' : 'נועה • מומחית טכנית'}
                   </span>
-                  {msg.role === 'model' && (
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  )}
                 </div>
-                <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                  msg.role === 'user' 
-                  ? 'bg-slate-800/80 text-slate-100 border border-white/5' 
-                  : 'glass-item text-brand-text border-white/5 font-medium'
-                }`}>
-                  {msg.content}
+
+                <div 
+                  className={`p-4 rounded-2xl text-sm leading-relaxed shadow-xl backdrop-blur-md relative overflow-hidden ${
+                    msg.role === 'user' 
+                    ? 'bg-slate-800/80 text-slate-100 border border-white/5 rounded-tl-none' 
+                    : 'bg-emerald-500/10 text-brand-text border border-emerald-500/20 rounded-tr-none'
+                  }`}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    const tutorialBtn = target.closest('.tutorial-btn') as HTMLElement;
+                    if (tutorialBtn) {
+                      const fileName = tutorialBtn.getAttribute('data-file');
+                      const product = products.find(p => p.name === fileName);
+                      if (product) {
+                        openTutorial(product);
+                      } else if (fileName) {
+                         const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                         window.open(`https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(fileName)}`, '_blank');
+                      } else {
+                        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                        window.open(`https://drive.google.com/drive/u/0/folders/${folderId}`, '_blank');
+                      }
+                      return;
+                    }
+
+                    const button = target.closest('button');
+                    if (button && msg.role === 'model') {
+                      const text = button.innerText || button.textContent;
+                      if (text) {
+                        setInput(text);
+                        // Optional: auto-send
+                        setTimeout(() => handleSend(text), 100);
+                      }
+                    }
+                  }}
+                >
+                  {msg.role === 'model' && (
+                    <div className="flex items-center gap-3 mb-3 border-b border-emerald-500/10 pb-3">
+                       <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/50 shadow-lg">
+                          <img 
+                            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                            alt="Noa Inside"
+                            className="w-full h-full object-cover"
+                          />
+                       </div>
+                       <div className="h-1 w-full bg-slate-800/50 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: '40%' }} // AI should ideally control this, or just a dummy one for now
+                            className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                          />
+                       </div>
+                    </div>
+                  )}
+
+                  {msg.role === 'model' ? (
+                    <div className="noa-html-content space-y-3" dangerouslySetInnerHTML={{ __html: msg.content }} />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             </div>
@@ -202,14 +288,14 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                   className="mt-2 pr-11"
                 >
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {msg.recommendations.map(product => (
-                      <div key={product.id} className="min-w-[220px] bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-xl p-4 shadow-lg flex flex-col gap-3">
+                    {msg.recommendations.map((product, pIdx) => (
+                      <div key={`${product.id}-${pIdx}`} className="min-w-[220px] bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-xl p-4 shadow-lg flex flex-col gap-3">
                         <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">הצעת UPSELL מומלצת</div>
                         <h5 className="font-bold text-sm text-slate-900">{product.name}</h5>
                         <div className="flex items-center justify-between mt-auto">
                           <span className="font-black text-brand-blue text-lg">₪{product.price}</span>
                           <button 
-                            onClick={() => openFile(product.name)}
+                            onClick={() => openTutorial(product)}
                             className="bg-brand-blue text-brand-dark px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-tight hover:bg-cyan-400 transition-all flex items-center gap-1.5 shadow-sm"
                           >
                             <Video size={14} />
@@ -230,6 +316,46 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
             <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.5 }} className="w-1.5 h-1.5 bg-brand-blue rounded-full" />
             <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }} className="w-1.5 h-1.5 bg-brand-blue rounded-full" />
             <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }} className="w-1.5 h-1.5 bg-brand-blue rounded-full" />
+          </div>
+        )}
+
+        {isLoadingTutorial && (
+          <div className="flex justify-end mr-auto max-w-[90%] flex-col gap-2">
+            <div className="flex items-start gap-3 flex-row-reverse">
+              <div className="flex flex-col items-end">
+                <div className="flex items-center gap-2 mb-1 px-1">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">נועה • מומחית טכנית</span>
+                </div>
+                <div className="p-4 rounded-2xl text-sm leading-relaxed shadow-xl backdrop-blur-md bg-emerald-500/10 text-brand-text border border-emerald-500/20 rounded-tr-none min-w-[200px]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/50 relative">
+                       <img 
+                         src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                         className="w-full h-full object-cover"
+                         alt="Noa"
+                       />
+                       <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                          <motion.div 
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                            className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                          />
+                       </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold">טוענת עבורך את הדרכת {loadingTutorialName}...</p>
+                      <div className="h-1 w-full bg-slate-800/50 rounded-full overflow-hidden mt-2">
+                        <motion.div 
+                          animate={{ x: ['-100%', '100%'] }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                          className="h-full w-1/3 bg-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

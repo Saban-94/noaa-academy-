@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Layout } from './components/Layout';
 import { MediaWidget, LinkImporter } from './components/MediaWidget';
@@ -13,6 +13,7 @@ import { NoaChat } from './components/NoaChat';
 import { ProductCatalog } from './components/ProductCatalog';
 import { MediaItem, MediaType, Product } from './types';
 import { Sparkles, MessageCircle, X, Smartphone, Monitor } from 'lucide-react';
+import { fetchProducts } from './services/apiService';
 
 const DUMMY_PRODUCTS: Product[] = [
   {
@@ -83,12 +84,23 @@ const INITIAL_MEDIA: MediaItem[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
+  const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA);
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(() => {
     const lastId = localStorage.getItem('hub_last_viewed');
     return INITIAL_MEDIA.find(m => m.id === lastId) || INITIAL_MEDIA[0];
   });
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      const fetched = await fetchProducts();
+      if (fetched.length > 0) {
+        setProducts(fetched);
+      }
+    };
+    loadProducts();
+  }, []);
 
   const handleImport = (url: string) => {
     let type = MediaType.DOCUMENT;
@@ -109,7 +121,7 @@ export default function App() {
   if (viewMode === 'mobile') {
     return (
       <div className="relative h-screen w-full overflow-hidden">
-        <MediaCenter mediaItems={mediaItems} products={DUMMY_PRODUCTS} />
+        <MediaCenter mediaItems={mediaItems} products={products} />
         
         {/* View Mode Toggle Overlay */}
         <button 
@@ -200,7 +212,14 @@ export default function App() {
           </div>
         );
       case 'catalog':
-        return <ProductCatalog products={DUMMY_PRODUCTS} />;
+        return <ProductCatalog 
+          products={products} 
+          onSelectMedia={(item) => {
+            setMediaItems(prev => [item, ...prev.filter(m => m.id !== item.id)]);
+            setActiveMedia(item);
+            setActiveTab('dashboard');
+          }}
+        />;
       default:
         return (
           <div className="flex items-center justify-center h-full text-slate-500">
@@ -253,8 +272,12 @@ export default function App() {
             className="fixed bottom-28 left-8 w-96 h-[600px] z-50 shadow-2xl"
           >
             <NoaChat 
-              products={DUMMY_PRODUCTS} 
+              products={products} 
               currentContext={activeMedia?.description || 'אין תוכן מוטמע כרגע'} 
+              onSelectMedia={(item) => {
+                setMediaItems(prev => [item, ...prev.filter(m => m.id !== item.id)]);
+                setActiveMedia(item);
+              }}
             />
           </motion.div>
         )}

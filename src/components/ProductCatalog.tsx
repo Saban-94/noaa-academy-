@@ -1,34 +1,92 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Filter, ShoppingCart, Tag, ChevronRight, X, Sparkles, ArrowLeft, Video } from 'lucide-react';
-import { Product } from '../types';
+import { Product, MediaItem, MediaType } from '../types';
+import { getFileId } from '../services/apiService';
 
 interface ProductCatalogProps {
   products: Product[];
+  onSelectMedia?: (item: MediaItem) => void;
 }
 
-export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
+export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products, onSelectMedia }) => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingTutorial, setIsLoadingTutorial] = useState<string | null>(null);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     p.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getRelatedProducts = (product: Product) => {
-    // 1. Get upsell products by ID
-    const upsells = products.filter(p => product.upsellProducts?.includes(p.id));
+  const handleWatchTutorial = async (product: Product, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsLoadingTutorial(product.id);
     
-    // 2. Get products in same category (excluding current and upsells already found)
+    try {
+      let videoUrl = product.videoUrl;
+      let pdfUrl = product.pdfUrl;
+
+      // If missing, try to fetch file ID as fallback (old logic)
+      if (!videoUrl && !pdfUrl) {
+        const fileId = await getFileId(product.name);
+        if (fileId) {
+          videoUrl = `https://drive.google.com/file/d/${fileId}/view`;
+        }
+      }
+
+      if ((videoUrl || pdfUrl) && onSelectMedia) {
+        const altSources = [];
+        if (videoUrl && pdfUrl) {
+          altSources.push({ type: MediaType.DOCUMENT, url: pdfUrl.startsWith('http') ? pdfUrl : `https://drive.google.com/file/d/${pdfUrl}/view`, title: 'חשוב: מפרט טכני (PDF)' });
+        }
+
+        const primaryUrl = videoUrl || pdfUrl || '';
+        const primaryType = videoUrl ? MediaType.VIDEO : MediaType.DOCUMENT;
+
+        const newItem: MediaItem = {
+          id: `dynamic-${Date.now()}`,
+          title: `הדרכה: ${product.name}`,
+          type: primaryType,
+          url: primaryUrl.startsWith('http') ? primaryUrl : `https://drive.google.com/file/d/${primaryUrl}/view`,
+          description: `הדרכה טכנית עבור ${product.name}`,
+          altSources: altSources
+        };
+        onSelectMedia(newItem);
+      } else {
+        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+        const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
+        window.open(searchUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error fetching tutorial:', error);
+    } finally {
+      setIsLoadingTutorial(null);
+    }
+  };
+
+  const getRelatedProducts = (product: Product) => {
+    // 1. Get explicit complementary product
+    const complementary = products.find(p => p.id === product.complementaryProductId);
+    
+    // 2. Get other upsell products by ID
+    const upsells = products.filter(p => product.upsellProducts?.includes(p.id) && p.id !== product.complementaryProductId);
+    
+    // 3. Get products in same category (excluding current and already found)
     const sameCategory = products.filter(p => 
       p.category === product.category && 
       p.id !== product.id && 
+      complementary?.id !== p.id &&
       !upsells.some(u => u.id === p.id)
     );
 
-    // Combine and limit to 4
-    return [...upsells, ...sameCategory].slice(0, 4);
+    // Combine: Complementary first, then upsells, then same category
+    const combined = [];
+    if (complementary) combined.push(complementary);
+    combined.push(...upsells);
+    combined.push(...sameCategory);
+
+    return combined.slice(0, 4);
   };
 
   return (
@@ -95,15 +153,19 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                     <motion.span layoutId={`price-${product.id}`} className="text-xl font-black text-brand-dark">₪{product.price}</motion.span>
                   </div>
                   <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
-                      const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
-                      window.open(searchUrl, '_blank');
-                    }}
-                    className="w-10 h-10 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-brand-blue/20 active:scale-95"
+                    onClick={(e) => handleWatchTutorial(product, e)}
+                    disabled={isLoadingTutorial === product.id}
+                    className="w-10 h-10 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-brand-blue/20 active:scale-95 disabled:opacity-50 disabled:cursor-wait"
                   >
-                    <Video size={18} />
+                    {isLoadingTutorial === product.id ? (
+                      <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-brand-dark border-t-transparent rounded-full"
+                      />
+                    ) : (
+                      <Video size={18} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -187,15 +249,20 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                         </motion.span>
                       </div>
                       <button 
-                        onClick={() => {
-                          const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
-                          const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(selectedProduct.name)}`;
-                          window.open(searchUrl, '_blank');
-                        }}
-                        className="flex items-center gap-3 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-brand-blue/20 group"
+                        onClick={() => handleWatchTutorial(selectedProduct)}
+                        disabled={isLoadingTutorial === selectedProduct.id}
+                        className="flex items-center gap-3 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-brand-blue/20 group disabled:opacity-50 disabled:cursor-wait"
                       >
-                        <Video size={20} className="group-hover:scale-110 transition-transform" />
-                        צפה בהדרכה
+                        {isLoadingTutorial === selectedProduct.id ? (
+                           <motion.div 
+                             animate={{ rotate: 360 }}
+                             transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                             className="w-5 h-5 border-2 border-brand-dark border-t-transparent rounded-full"
+                           />
+                        ) : (
+                          <Video size={20} className="group-hover:scale-110 transition-transform" />
+                        )}
+                        {isLoadingTutorial === selectedProduct.id ? 'טוען הדרכה...' : 'צפה בהדרכה'}
                       </button>
                     </div>
 
@@ -214,9 +281,9 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {getRelatedProducts(selectedProduct).map((related) => (
+                    {getRelatedProducts(selectedProduct).map((related, rIdx) => (
                       <motion.div 
-                        key={related.id}
+                        key={`${related.id}-${rIdx}`}
                         onClick={() => setSelectedProduct(related)}
                         whileHover={{ y: -5 }}
                         className="group cursor-pointer"
@@ -235,7 +302,21 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                           )}
                         </div>
                         <h5 className="text-[10px] font-bold text-slate-800 uppercase truncate mb-1">{related.name}</h5>
-                        <div className="text-xs font-black text-brand-blue">₪{related.price}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-black text-brand-blue">₪{related.price}</div>
+                          {(related.videoUrl || related.pdfUrl) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleWatchTutorial(related);
+                              }}
+                              className="w-6 h-6 flex items-center justify-center bg-brand-blue/20 hover:bg-brand-blue text-brand-dark rounded-md transition-all active:scale-95"
+                              title="צפה בהדרכה"
+                            >
+                              <Video size={12} />
+                            </button>
+                          )}
+                        </div>
                       </motion.div>
                     ))}
                     {getRelatedProducts(selectedProduct).length === 0 && (
