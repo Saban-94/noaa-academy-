@@ -228,7 +228,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                     <div className="flex items-center gap-3 mb-3 border-b border-emerald-500/10 pb-3">
                        <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/50 shadow-lg">
                           <img 
-                            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                            src="https://ibb.co/Qv5zkKfZ" 
                             alt="Noa Inside"
                             className="w-full h-full object-cover"
                           />
