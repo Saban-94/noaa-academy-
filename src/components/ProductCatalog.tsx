@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Filter, ShoppingCart, Tag, ChevronRight, X, Sparkles, ArrowLeft } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Tag, ChevronRight, X, Sparkles, ArrowLeft, Video } from 'lucide-react';
 import { Product } from '../types';
 
 interface ProductCatalogProps {
@@ -94,8 +94,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">מחיר לצרכן</span>
                     <motion.span layoutId={`price-${product.id}`} className="text-xl font-black text-brand-dark">₪{product.price}</motion.span>
                   </div>
-                  <button className="w-10 h-10 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-brand-blue/20 active:scale-95">
-                    <ShoppingCart size={18} />
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                      const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
+                      window.open(searchUrl, '_blank');
+                    }}
+                    className="w-10 h-10 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white rounded-lg flex items-center justify-center transition-all shadow-lg shadow-brand-blue/20 active:scale-95"
+                  >
+                    <Video size={18} />
                   </button>
                 </div>
               </div>
@@ -178,9 +186,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ products }) => {
                           ₪{selectedProduct.price}
                         </motion.span>
                       </div>
-                      <button className="flex items-center gap-3 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-brand-blue/20 group">
-                        <ShoppingCart size={20} className="group-hover:scale-110 transition-transform" />
-                        הוסף לסל
+                      <button 
+                        onClick={() => {
+                          const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+                          const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(selectedProduct.name)}`;
+                          window.open(searchUrl, '_blank');
+                        }}
+                        className="flex items-center gap-3 bg-brand-blue hover:bg-brand-dark text-brand-dark hover:text-white px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-brand-blue/20 group"
+                      >
+                        <Video size={20} className="group-hover:scale-110 transition-transform" />
+                        צפה בהדרכה
                       </button>
                     </div>
 

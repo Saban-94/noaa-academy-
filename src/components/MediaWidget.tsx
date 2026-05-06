@@ -52,7 +52,9 @@ const getEmbedUrl = (url: string, type: MediaType) => {
 
   switch (type) {
     case MediaType.PRESENTATION:
-      return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000&rm=minimal`;
+    case MediaType.DOCUMENT:
+      // Optimized viewer URL for in-app presentation/document viewing
+      return `https://docs.google.com/viewer?srcid=${fileId}&embedded=true&rm=minimal&chrome=false`;
     case MediaType.VIDEO:
     case MediaType.AUDIO:
       return `https://drive.google.com/file/d/${fileId}/preview`;
@@ -156,6 +158,9 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const [currentSlide, setCurrentSlide] = useState(() => {
     return parseInt(localStorage.getItem(`slide_${item.id}`) || '1');
   });
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(localStorage.getItem(`page_${item.id}`) || '1');
+  });
   const [zoom, setZoom] = useState(() => {
     return parseFloat(localStorage.getItem(`zoom_${item.id}`) || '1');
   });
@@ -167,6 +172,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
     return localStorage.getItem(`summary_${item.id}`);
   });
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isLocalFullscreen, setIsLocalFullscreen] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const totalSlides = 12;
@@ -189,8 +195,9 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   // Persist state
   useEffect(() => {
     localStorage.setItem(`slide_${item.id}`, currentSlide.toString());
+    localStorage.setItem(`page_${item.id}`, currentPage.toString());
     localStorage.setItem(`zoom_${item.id}`, zoom.toString());
-  }, [currentSlide, zoom, item.id]);
+  }, [currentSlide, currentPage, zoom, item.id]);
 
   /**
    * Handle CSV/Table data loading via API to bypass iFrame blocks
@@ -244,6 +251,8 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
 
   const nextSlide = () => setCurrentSlide(prev => Math.min(prev + 1, totalSlides));
   const prevSlide = () => setCurrentSlide(prev => Math.max(prev - 1, 1));
+  const nextPage = () => setCurrentPage(prev => prev + 1);
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
   const zoomIn = () => setZoom(prev => Math.min(prev + 0.25, 2));
   const zoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
 
@@ -379,91 +388,94 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
           </div>
         );
       case MediaType.PRESENTATION:
+      case MediaType.DOCUMENT:
+        const isDoc = item.type === MediaType.DOCUMENT;
         return (
           <div className="space-y-4">
-            <div ref={containerRef} className="relative aspect-[16/9] bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl group">
+            <div 
+              ref={containerRef} 
+              className={`relative bg-slate-100 rounded-3xl overflow-hidden border border-white/10 shadow-2xl group transition-all duration-500 ${
+                isLocalFullscreen ? 'fixed inset-0 z-[100] rounded-none' : 'aspect-[16/9]'
+              }`}
+            >
                <motion.div 
-                 animate={{ scale: zoom }}
+                 drag={zoom > 1}
+                 dragConstraints={{ left: -200 * zoom, right: 200 * zoom, top: -400 * zoom, bottom: 400 * zoom }}
+                 animate={{ 
+                   scale: zoom,
+                   x: zoom > 1 ? undefined : 0, 
+                   y: zoom > 1 ? undefined : 0
+                 }}
                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                 className="absolute inset-0 w-full h-full"
+                 className="absolute inset-0 w-full h-full origin-center"
                >
                  <iframe 
-                   src={`${getEmbedUrl(item.url, MediaType.PRESENTATION)}#slide=id.p${currentSlide}`}
+                   src={getEmbedUrl(item.url, item.type)}
                    className="w-full h-full border-0"
                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                    title={item.title}
                  />
                </motion.div>
+ 
+               {/* Floating Overlay Controls (Glassmorphism) */}
+               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl z-30 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                  <div className="flex bg-white/5 rounded-xl overflow-hidden border border-white/5">
+                    <button onClick={zoomOut} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors"><ZoomOut size={18}/></button>
+                    <div className="px-3 flex items-center text-[10px] font-black text-white min-w-[50px] justify-center">{Math.round(zoom * 100)}%</div>
+                    <button onClick={zoomIn} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"><ZoomIn size={18}/></button>
+                  </div>
 
-               {/* Glass UI Top Controls */}
-               <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-                 <div className="flex bg-black/60 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden">
-                   <button onClick={zoomOut} className="w-12 h-12 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-l border-white/5"><ZoomOut size={20}/></button>
-                   <div className="px-3 flex items-center text-[10px] font-bold text-white min-w-[50px] justify-center">{Math.round(zoom * 100)}%</div>
-                   <button onClick={zoomIn} className="w-12 h-12 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"><ZoomIn size={20}/></button>
-                 </div>
-                 <button onClick={toggleFullscreen} className="w-12 h-12 flex items-center justify-center bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white hover:bg-white/10 transition-colors shadow-lg">
-                   <Maximize2 size={20} />
-                 </button>
-               </div>
-               
-               {/* Side Nav Buttons - Always accessible but styled subtly */}
-               <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 pointer-events-none z-10">
-                 <motion.button 
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.9 }}
-                   onClick={prevSlide} 
-                   className={`w-14 h-14 bg-black/40 backdrop-blur-xl rounded-full flex items-center justify-center text-white pointer-events-auto border border-white/10 shadow-2xl transition-all ${currentSlide === 1 ? 'opacity-20 grayscale pointer-events-none' : 'hover:bg-brand-blue hover:text-brand-dark opacity-0 group-hover:opacity-100'}`}
-                 >
-                   <ChevronRight size={28}/>
-                 </motion.button>
-                 <motion.button 
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.9 }}
-                   onClick={nextSlide} 
-                   className={`w-14 h-14 bg-black/40 backdrop-blur-xl rounded-full flex items-center justify-center text-white pointer-events-auto border border-white/10 shadow-2xl transition-all ${currentSlide === totalSlides ? 'opacity-20 grayscale pointer-events-none' : 'hover:bg-brand-blue hover:text-brand-dark opacity-0 group-hover:opacity-100'}`}
-                 >
-                   <ChevronLeft size={28}/>
-                 </motion.button>
+                  <div className="h-6 w-px bg-white/10 mx-1" />
+
+                  {isDoc ? (
+                    <div className="flex items-center gap-2 px-4">
+                       <button onClick={prevPage} className="text-white/60 hover:text-white transition-colors"><ChevronRight size={20}/></button>
+                       <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest min-w-[60px] text-center">עמוד {currentPage}</span>
+                       <button onClick={nextPage} className="text-white/60 hover:text-white transition-colors"><ChevronLeft size={20}/></button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-4">
+                       <button onClick={prevSlide} className="text-white/60 hover:text-white transition-colors"><ChevronRight size={20}/></button>
+                       <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest min-w-[60px] text-center">שקף {currentSlide} / {totalSlides}</span>
+                       <button onClick={nextSlide} className="text-white/60 hover:text-white transition-colors"><ChevronLeft size={20}/></button>
+                    </div>
+                  )}
+
+                  <div className="h-6 w-px bg-white/10 mx-1" />
+
+                  <button 
+                    onClick={() => setIsLocalFullscreen(!isLocalFullscreen)}
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isLocalFullscreen ? 'bg-brand-blue text-brand-dark' : 'text-white hover:bg-white/10'}`}
+                  >
+                    <Maximize2 size={18} />
+                  </button>
                </div>
 
-               {/* Bottom Slide Status */}
-               <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-all">
-                  <div className="bg-black/80 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 flex items-center gap-3 shadow-2xl text-[10px] font-black pointer-events-auto">
-                    <span className="text-brand-blue">שקף {currentSlide} מתוך {totalSlides}</span>
+               {/* Top Right Quick Actions */}
+               <div className="absolute top-4 right-4 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10">
+                     <Sparkles size={12} className="text-brand-blue animte-pulse" />
+                     <span className="text-[10px] font-black text-white uppercase tracking-widest">
+                       {isDoc ? 'מסמך טכני Native' : 'מצגת Native'}
+                     </span>
                   </div>
                </div>
             </div>
-
-            {/* Pagination / Context Bar */}
+ 
+            {/* Footer / Summary Bar */}
             <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-3xl border border-white/5">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-4">
-                    <div className="flex bg-white/5 rounded-lg border border-white/10 p-1">
-                      <button 
-                        onClick={prevSlide} 
-                        disabled={currentSlide === 1}
-                        className="p-2 text-white hover:bg-white/5 disabled:opacity-20 rounded-md transition-colors"
-                      >
-                        <ChevronRight size={20} />
-                      </button>
-                      <div className="px-3 flex items-center text-xs font-bold text-brand-blue min-w-[60px] justify-center">
-                        {currentSlide} / {totalSlides}
-                      </div>
-                      <button 
-                        onClick={nextSlide} 
-                        disabled={currentSlide === totalSlides}
-                        className="p-2 text-white hover:bg-white/5 disabled:opacity-20 rounded-md transition-colors"
-                      >
-                        <ChevronLeft size={20} />
-                      </button>
-                    </div>
-                    <div className="h-1.5 w-32 bg-white/5 rounded-full overflow-hidden hidden sm:block">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(currentSlide / totalSlides) * 100}%` }}
-                        className="h-full bg-brand-blue"
+                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-brand-blue/30 shadow-xl">
+                      <img 
+                        src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
+                        alt="Noa"
+                        className="w-full h-full object-cover"
                       />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-bold text-sm">ניתוח של נועה</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">בסיס נתונים NotebookLM</p>
                     </div>
                   </div>
                   
@@ -480,7 +492,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                       )}
                       סיכום AI
                     </button>
-
+ 
                     <button 
                       onClick={() => window.open(item.url, '_blank')}
                       className="text-brand-blue font-bold text-xs flex items-center gap-2 hover:underline tracking-tight"
@@ -489,7 +501,7 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                     </button>
                   </div>
                 </div>
-
+ 
                 <AnimatePresence>
                   {presentationSummary && (
                     <motion.div

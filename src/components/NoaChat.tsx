@@ -43,6 +43,12 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
     }
   }, [messages, isTyping]);
 
+  const openFile = (productName: string) => {
+    const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
+    const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(productName)}`;
+    window.open(searchUrl, '_blank');
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -202,8 +208,12 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                         <h5 className="font-bold text-sm text-slate-900">{product.name}</h5>
                         <div className="flex items-center justify-between mt-auto">
                           <span className="font-black text-brand-blue text-lg">₪{product.price}</span>
-                          <button className="bg-brand-dark text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-slate-800 transition-colors">
-                            הוסף לסל
+                          <button 
+                            onClick={() => openFile(product.name)}
+                            className="bg-brand-blue text-brand-dark px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-tight hover:bg-cyan-400 transition-all flex items-center gap-1.5 shadow-sm"
+                          >
+                            <Video size={14} />
+                            צפה בהדרכה
                           </button>
                         </div>
                       </div>
