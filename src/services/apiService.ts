@@ -1,6 +1,6 @@
 import { MediaItem, Product } from '../types';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN6o-RcJMD7qZ_lmLfdvdnTyRaYnX5Hapmzu0iwCmIIz5O9XG7lzYbRitW5BLVtvh4aw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwZttOMOCtHZ3rvU5VaGlYxi8rpft5OTYVPvt0Z_QDXwlAzsJQpZb9qy5zlvuCQtLf2tA/exec';
 
 export async function fetchDriveFiles(): Promise<MediaItem[]> {
   try {
