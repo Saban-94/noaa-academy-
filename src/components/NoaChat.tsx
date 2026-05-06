@@ -80,7 +80,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
         };
         onSelectMedia(newItem);
       } else {
-        const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
+        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
         const searchUrl = `https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(product.name)}`;
         window.open(searchUrl, '_blank');
       }
@@ -150,11 +150,11 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500/50 shadow-xl">
              <img 
-                src="https://ibb.co/ZpxLxJkV" 
+                src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
                 alt="Noa Professional"
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://i.postimg.cc/B6QMLtRc/Gemini-Generated-Image-s9onzs9onzs9onzs.png';
+                  (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=N&background=0284c7&color=fff';
                 }}
              />
           </div>
@@ -204,10 +204,10 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                       if (product) {
                         openTutorial(product);
                       } else if (fileName) {
-                         const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
+                         const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
                          window.open(`https://drive.google.com/drive/u/0/search?q=parent:${folderId}%20${encodeURIComponent(fileName)}`, '_blank');
                       } else {
-                        const folderId = '1UQsfzKuCfsDZMFXsyLWN8De709VcDvCE';
+                        const folderId = '13Mdl9DJSEVVXEGwGifSQV3rTP_B4T6Y6';
                         window.open(`https://drive.google.com/drive/u/0/folders/${folderId}`, '_blank');
                       }
                       return;
@@ -228,7 +228,7 @@ export const NoaChat: React.FC<NoaChatProps> = ({ products, currentContext, medi
                     <div className="flex items-center gap-3 mb-3 border-b border-emerald-500/10 pb-3">
                        <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/50 shadow-lg">
                           <img 
-                            src="https://i.postimg.cc/B6QMLtRc/Gemini-Generated-Image-s9onzs9onzs9onzs.png" 
+                            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100" 
                             alt="Noa Inside"
                             className="w-full h-full object-cover"
                           />

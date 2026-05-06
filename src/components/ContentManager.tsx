@@ -56,6 +56,14 @@ export const ContentManager: React.FC<ContentManagerProps> = ({ files, setFiles,
     if (files.length <= 1) { // 1 is the initial dummy
       syncDrive();
     }
+
+    // Set up automatic background sync every 5 minutes
+    const interval = setInterval(() => {
+      console.log('Background sync starting...');
+      syncDrive();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
   }, []);
 
   const filteredFiles = filter 

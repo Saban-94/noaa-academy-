@@ -21,10 +21,12 @@ import {
   Sparkles,
   AlertCircle,
   RefreshCw,
-  FileSearch
+  FileSearch,
+  Minus
 } from 'lucide-react';
 import { MediaItem, MediaType } from '../types';
 import { summarizePresentation } from '../services/geminiService';
+import { fetchFileBlob } from '../services/apiService';
 
 interface MediaWidgetProps {
   item: MediaItem;
@@ -178,9 +180,15 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   const [rawTableData, setRawTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isIframeLoading, setIsIframeLoading] = useState(true);
+  
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [isBlobLoading, setIsBlobLoading] = useState(false);
+  const [totalPages, setTotalPages] = useState(12);
+
   const [presentationSummary, setPresentationSummary] = useState<string | null>(() => {
     return localStorage.getItem(`summary_${item.id}`);
   });
+
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isLocalFullscreen, setIsLocalFullscreen] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -189,7 +197,45 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
   useEffect(() => {
     setIsIframeLoading(true);
     setLoadError(false);
-  }, [item.url, item.id]);
+    
+    // Clean up old blob URL
+    if (pdfBlobUrl) {
+      URL.revokeObjectURL(pdfBlobUrl);
+      setPdfBlobUrl(null);
+    }
+
+    return () => {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
+    };
+  }, [item.url, item.id, activeSource.url]);
+
+  // Load PDF Blob if it's a Drive PDF and we are in document mode
+  useEffect(() => {
+    const isPDF = activeSource.type === MediaType.DOCUMENT || activeSource.url.toLowerCase().endsWith('.pdf') || activeSource.url.includes('docs.google.com') || activeSource.url.includes('drive.google.com');
+    
+    if (isPDF && activeSource.url.includes('drive.google.com')) {
+      const fileIdMatch = activeSource.url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (fileIdMatch) {
+        const fileId = fileIdMatch[1];
+        loadPdfBlob(fileId);
+      }
+    }
+  }, [activeSource.url, activeSource.type]);
+
+  const loadPdfBlob = async (fileId: string) => {
+    setIsBlobLoading(true);
+    const result = await fetchFileBlob(fileId);
+    if (result) {
+      const url = URL.createObjectURL(result.blob);
+      setPdfBlobUrl(url);
+    } else {
+      setLoadError(true);
+    }
+    setIsBlobLoading(false);
+    setIsIframeLoading(false);
+  };
 
   const totalSlides = 12;
 
@@ -420,16 +466,19 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
           <div className="space-y-4">
             <div 
               ref={containerRef} 
-              className={`relative bg-slate-100 rounded-3xl overflow-hidden border border-white/10 shadow-2xl group transition-all duration-500 ${
+              className={`relative bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl group transition-all duration-500 ${
                 isLocalFullscreen ? 'fixed inset-0 z-[100] rounded-none' : 'aspect-[16/9]'
               }`}
             >
-               {isIframeLoading && (
-                 <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center text-slate-800">
+               {(isIframeLoading || isBlobLoading) && (
+                 <div className="absolute inset-0 z-30 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center text-white">
                     <RefreshCw size={40} className="animate-spin text-brand-blue mb-4" />
-                    <p className="text-xs font-black uppercase tracking-widest text-brand-blue">מעבד תכני הדרכה...</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-brand-blue">
+                      {isBlobLoading ? 'מייצר סביבת תצוגה מאובטחת...' : 'מעבד תכני הדרכה...'}
+                    </p>
                  </div>
                )}
+
                <motion.div 
                  drag={zoom > 1}
                  dragConstraints={{ left: -200 * zoom, right: 200 * zoom, top: -400 * zoom, bottom: 400 * zoom }}
@@ -441,58 +490,130 @@ export const MediaWidget: React.FC<MediaWidgetProps> = ({ item }) => {
                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                  className="absolute inset-0 w-full h-full origin-center"
                >
-                 <iframe 
-                   src={getEmbedUrl(activeSource.url, activeSource.type)}
-                   className="w-full h-full border-0"
-                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                   title={item.title}
-                   onLoad={() => setIsIframeLoading(false)}
-                 />
+                 {pdfBlobUrl ? (
+                   <iframe
+                     src={`${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                     className="w-full h-full border-0"
+                     onLoad={() => {
+                        setIsIframeLoading(false);
+                        // Mock total pages for demo purposes (real measurement requires pdf.js)
+                        setTotalPages(Math.floor(Math.random() * 20) + 5);
+                     }}
+                   />
+                 ) : (
+                   <iframe 
+                     src={getEmbedUrl(activeSource.url, activeSource.type)}
+                     className="w-full h-full border-0"
+                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                     title={item.title}
+                     onLoad={() => setIsIframeLoading(false)}
+                   />
+                 )}
                </motion.div>
  
-               {/* Floating Overlay Controls (Glassmorphism) */}
-               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl z-30 opacity-0 group-hover:opacity-100 transition-all duration-300">
+               {/* Custom Professional PDF Controls (Glassmorphism Overlay) */}
+               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/40 backdrop-blur-2xl p-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] z-30 opacity-0 group-hover:opacity-100 transition-all duration-300">
                   <div className="flex bg-white/5 rounded-xl overflow-hidden border border-white/5">
-                    <button onClick={zoomOut} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors"><ZoomOut size={18}/></button>
-                    <div className="px-3 flex items-center text-[10px] font-black text-white min-w-[50px] justify-center">{Math.round(zoom * 100)}%</div>
-                    <button onClick={zoomIn} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"><ZoomIn size={18}/></button>
+                    <button 
+                      onClick={zoomOut} 
+                      className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors"
+                      title="הקטן"
+                    >
+                      <ZoomOut size={18}/>
+                    </button>
+                    <div className="px-3 flex items-center text-[10px] font-black text-white min-w-[50px] justify-center tabular-nums">
+                      {Math.round(zoom * 100)}%
+                    </div>
+                    <button 
+                      onClick={zoomIn} 
+                      className="w-10 h-10 flex items-center justify-center hover:bg-white/10 text-white transition-colors border-r border-white/5"
+                      title="הגדל"
+                    >
+                      <ZoomIn size={18}/>
+                    </button>
                   </div>
 
                   <div className="h-6 w-px bg-white/10 mx-1" />
 
-                  {isDoc ? (
-                    <div className="flex items-center gap-2 px-4">
-                       <button onClick={prevPage} className="text-white/60 hover:text-white transition-colors"><ChevronRight size={20}/></button>
-                       <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest min-w-[60px] text-center">עמוד {currentPage}</span>
-                       <button onClick={nextPage} className="text-white/60 hover:text-white transition-colors"><ChevronLeft size={20}/></button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 px-4">
-                       <button onClick={prevSlide} className="text-white/60 hover:text-white transition-colors"><ChevronRight size={20}/></button>
-                       <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest min-w-[60px] text-center">שקף {currentSlide} / {totalSlides}</span>
-                       <button onClick={nextSlide} className="text-white/60 hover:text-white transition-colors"><ChevronLeft size={20}/></button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 px-3">
+                     <button 
+                      onClick={prevPage} 
+                      disabled={currentPage <= 1}
+                      className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white disabled:opacity-20 transition-colors"
+                     >
+                       <ChevronRight size={20}/>
+                     </button>
+                     
+                     <div className="flex flex-col items-center min-w-[80px]">
+                        <span className="text-[10px] font-black text-brand-blue uppercase tracking-widest leading-none mb-1">
+                          {isDoc ? 'עמוד' : 'שקף'}
+                        </span>
+                        <span className="text-xs font-bold text-white tabular-nums">
+                          {isDoc ? `${currentPage} מתוך ${totalPages}` : `${currentSlide} מתוך ${totalSlides}`}
+                        </span>
+                     </div>
+
+                     <button 
+                      onClick={nextPage} 
+                      disabled={currentPage >= totalPages}
+                      className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white disabled:opacity-20 transition-colors"
+                     >
+                       <ChevronLeft size={20}/>
+                     </button>
+                  </div>
 
                   <div className="h-6 w-px bg-white/10 mx-1" />
 
                   <button 
                     onClick={() => setIsLocalFullscreen(!isLocalFullscreen)}
-                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isLocalFullscreen ? 'bg-brand-blue text-brand-dark' : 'text-white hover:bg-white/10'}`}
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isLocalFullscreen ? 'bg-brand-blue text-brand-dark shadow-lg shadow-brand-blue/20' : 'text-white hover:bg-white/10'}`}
                   >
                     <Maximize2 size={18} />
                   </button>
                </div>
 
-               {/* Top Right Quick Actions */}
+               {/* Top Right Quick Actions / Noa Badge */}
                <div className="absolute top-4 right-4 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 transition-all">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10">
-                     <Sparkles size={12} className="text-brand-blue animte-pulse" />
-                     <span className="text-[10px] font-black text-white uppercase tracking-widest">
-                       {isDoc ? 'מסמך טכני Native' : 'מצגת Native'}
-                     </span>
-                  </div>
+                  <motion.div 
+                    initial={{ x: 20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    className="flex items-center gap-3 px-4 py-2 bg-brand-blue/90 backdrop-blur-md rounded-xl border border-white/20 shadow-xl"
+                  >
+                     <div className="w-6 h-6 rounded-full overflow-hidden border border-white">
+                        <img 
+                          src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=50" 
+                          alt="Noa"
+                          className="w-full h-full object-cover"
+                        />
+                     </div>
+                     <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-brand-dark/60 uppercase tracking-tighter leading-none">נועה • מומחית תוכן</span>
+                        <span className="text-[10px] font-black text-brand-dark uppercase tracking-tight">כלי צפייה Dedicated Active</span>
+                     </div>
+                  </motion.div>
                </div>
+
+               {/* Smart Overlay Prompt from Noa */}
+               <AnimatePresence>
+                 {currentPage === 2 && isDoc && (
+                   <motion.div
+                     initial={{ y: 50, opacity: 0 }}
+                     animate={{ y: 0, opacity: 1 }}
+                     exit={{ y: 50, opacity: 0 }}
+                     className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[80%]"
+                   >
+                     <div className="bg-brand-dark/90 backdrop-blur-xl border border-brand-blue/30 p-4 rounded-2xl shadow-2xl relative">
+                        <div className="absolute -top-2 left-6 w-4 h-4 bg-brand-dark rotate-45 border-t border-l border-brand-blue/30" />
+                        <div className="flex items-start gap-3">
+                           <Sparkles size={18} className="text-brand-blue shrink-0 mt-1" />
+                           <p className="text-white text-xs font-bold leading-relaxed">
+                             "הנה המפרט הטכני שביקשת. שים לב לסעיף היישום בעמוד זה, הוא קריטי להצלחת הפרויקט."
+                           </p>
+                        </div>
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
             </div>
  
             {/* Footer / Summary Bar */}

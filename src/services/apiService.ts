@@ -78,3 +78,24 @@ export async function getFileId(productName: string): Promise<string | null> {
     return null;
   }
 }
+
+export async function fetchFileBlob(fileId: string): Promise<{ blob: Blob; name: string } | null> {
+  try {
+    const response = await fetch(`${SCRIPT_URL}?action=downloadFile&fileId=${fileId}`);
+    const data = await response.json();
+    if (data.base64) {
+      const byteCharacters = atob(data.base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: data.contentType });
+      return { blob, name: data.name };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching file blob:', error);
+    return null;
+  }
+}

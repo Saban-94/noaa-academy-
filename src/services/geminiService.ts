@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Message, Product } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.VITE_GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 const SYSTEM_PROMPT = `
 את שמה נועה, סוכנת AI חכמה בתוך אפליקציית "The Academy Hub". לשירותך עומדים תכנים המאוחסנים ב-Google Drive ומסונכרנים מ-NotebookLM.

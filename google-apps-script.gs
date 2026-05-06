@@ -24,6 +24,55 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(getChatHistory()))
       .setMimeType(ContentService.MimeType.JSON);
   }
+
+  if (action === 'getProducts') {
+    return ContentService.createTextOutput(JSON.stringify(getProducts()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'getFileId') {
+    const name = e.parameter.name;
+    return ContentService.createTextOutput(JSON.stringify({ fileId: getFileIdByName(name) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'downloadFile') {
+    const fileId = e.parameter.fileId;
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+    return ContentService.createTextOutput(JSON.stringify({ 
+      base64: base64, 
+      contentType: blob.getContentType(),
+      name: file.getName()
+    }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getProducts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheets()[0]; // Assume first sheet
+  const data = sheet.getDataRange().getValues();
+  data.shift(); // Remove headers
+  return data;
+}
+
+function getFileIdByName(name) {
+  const folder = DriveApp.getFolderById(FOLDER_ID);
+  const files = folder.getFilesByName(name);
+  if (files.hasNext()) {
+    return files.next().getId();
+  }
+  // Try fuzzy search
+  const allFiles = folder.getFiles();
+  while (allFiles.hasNext()) {
+    const file = allFiles.next();
+    if (file.getName().toLowerCase().includes(name.toLowerCase())) {
+      return file.getId();
+    }
+  }
+  return null;
 }
 
 function doPost(e) {
